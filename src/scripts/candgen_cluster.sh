@@ -3,19 +3,16 @@
 #for lang in ru om ilo or #so
 #for lang in ta zu ak am hi id es ar sw wo vi th bn tl hu zh fa ti si rw #so
 #for lang in ta hi id es ar sw vi bn tl hu zh fa #so
-for lang in ti
-#for lang in fa
+for lang in $1
 do
   for google_top in 1
     do
       for bert in 0
       do
-      #lang=es
+      # parameter for
       year=20191020
-#      year=20190701
       pool=1
       kbdir=/shared/EDL19/wiki_outdir
-#      kbdir=/pool0/webserver/incoming/experiment_tmp/EDL2019/data/outdir
       overwrite=1
       google=1
     #  google_top=1
@@ -31,7 +28,7 @@ do
       inlink=0
       mtype=0
       classifier=0
-#      bert=0
+      bert=0
       wiki_contain=0
 
       # -------------------------------------------------------------------------------------------------------- #
@@ -46,8 +43,6 @@ do
       fi
 
       TADIR=google${google}_top${google_top}_map${google_map}_gtrans${g_trans}_tsl${tsl}_spell${spell}_inlink${inlink}_mtype${mtype}_clas${classifier}_bert${bert}_wc${wiki_contain}_ptm${wikicg}_or2hin${pivoting}
-#      TADIR=google${google}_top${google_top}_map${google_map}_gtrans${g_trans}_tsl${tsl}_spell${spell}_inlink${inlink}_mtype${mtype}_clas${classifier}_bert${bert}_wc${wiki_contain}_ptm${wikicg}
-
       OUTDIR=${ROOTDIR}/${TADIR}
 
       CANDGEN_OUTDIR=${OUTDIR}/candgen
@@ -65,9 +60,6 @@ do
       python utils/evaluate_candgen.py -i ${CANDGEN_OUTDIR}.tab -g ${golddir}
 
       chmod -R 777 ${OUTDIR}
-    #   python hengji_ELISA.py --lang $lang
-    #   python /pool0/webserver/incoming/experiment_tmp/EDL2019/src/utils/json2tab.py --indir /pool0/webserver/incoming/experiment_tmp/EDL2019/data/hengji_output/${lang}
-    #   python /pool0/webserver/incoming/experiment_tmp/EDL2019/src/utils/evaluate_candgen.py -i /pool0/webserver/incoming/experiment_tmp/EDL2019/data/hengji_output/${lang}/candgen.tab -g /pool0/webserver/incoming/experiment_tmp/EDL2019/data/gold/wikiname_per/${lang}_wikiname.tab
-    done
+   done
   done
 done
