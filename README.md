@@ -4,7 +4,7 @@ This repository includes the code of our LORELEI 2019 system, links to the data 
 ## requirements
 For faster processing we store the various maps (e.g. string to Wikipedia candidates, string to Lorelei KB candidates etc.) in a mongodb database collection. MongoDB stores various statistics (e.g. inlink counts for each Wikipedia page) and string-to-candidate indices that are used to compute candidates.
 
-Make sure you preprocess Wikipedia dataset and load processed Wikipedia into Mongo.
+Make sure you preprocess Wikipedia dataset and load processed Wikipedia into Mongo following `https://github.com/shyamupa/wikidump_preprocessing`.
 
 For Cog-comp user,  To start up the Mongo DB daemon in macniece, run: 
 ```bash
@@ -39,7 +39,7 @@ In the script of candgen_cluster.sh:
 2. ROOTDIR refers to the EDL output folder
 3. golddir refers to the folder containig gold EDL data
 4. kbdir refers to the wikipedia data folder
-5. google is switch for google query log
+5. google is switch for google query log, use following google query website
 6. google_top refers to the number of top google results we take.
 7. google_map is switch for google map
 8. g_trans is switch for google transliteration
