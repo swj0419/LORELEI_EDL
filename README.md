@@ -39,10 +39,10 @@ In the script of candgen_cluster.sh:
 2. ROOTDIR refers to the EDL output folder
 3. golddir refers to the folder containig gold EDL data
 4. kbdir refers to the wikipedia data folder
-5. google is switch for google query log, use following google query website
+5. google is switch for google query log
 6. google_top refers to the number of top google results we take.
 7. google_map is switch for google map
 8. g_trans is switch for google transliteration
-9. tsl is switch for trained transliteration model
-10. wikicg is switch for ptm method
+9. tsl is switch for trained transliteration model, following `https://github.com/shyamupa/hma-translit`
+10. wikicg is switch for ptm method, following candidate generation part from `https://github.com/shyamupa/xelms`
 11. pivoting is switch for pivoting techniques
