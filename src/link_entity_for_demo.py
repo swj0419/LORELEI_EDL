@@ -37,7 +37,6 @@ feature_map = ["P","A"]
 logging.basicConfig(format=':%(levelname)s: %(message)s', level=logging.INFO)
 # logging.basicConfig(format=':%(levelname)s: %(message)s', level=logging.DEBUG)
 
-
 def softmax(x):
     """Compute softmax values for each sets of scores in x."""
     e_x = np.exp(x - np.max(x))
@@ -60,11 +59,11 @@ def mask_sents(surface, text):
 def s2maskedvec(masked_sents):
     vecs = []
     for sent in masked_sents:
-        tokenized_text = tokenizer.tokenize(sent)
+        tokenized_text = args.tokenizer.tokenize(sent)
         pos = tokenized_text.index('[MASK]')
-        indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_text)
+        indexed_tokens = args.tokenizer.convert_tokens_to_ids(tokenized_text)
         # Convert token to vocabulary indices
-        indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_text)
+        indexed_tokens = args.tokenizer.convert_tokens_to_ids(tokenized_text)
 
         # Convert inputs to PyTorch tensors
         tokens_tensor = torch.tensor([indexed_tokens])
@@ -532,10 +531,7 @@ class CandGen:
             max_score = l2s_map[max_cand]
         return max_cand, max_score
 
-    def compute_hits_for_ta(self, docta, outfile, only_nils=False, args=None):
-        if (not args.overwrite) and os.path.exists(outfile):
-            logging.error("file %s exists ... skipping", outfile)
-            return
+    def compute_hits_for_ta(self, docta, outfile=None, only_nils=False, args=None):
         try:
             ner_view = docta.get_view("NER_CONLL")
             # rom_view = docta.get_view("ROMANIZATION")
@@ -594,10 +590,12 @@ class CandGen:
         candgen_view = View(candgen_view_json, docta.get_tokens)
         docta.view_dictionary["CANDGEN"] = candgen_view
         docta_json = docta.as_json
-        with open(outfile, 'w', encoding='utf-8') as f:
-            json.dump(docta_json, f, ensure_ascii=False, indent=True)
+        if outfile is not None:
+            with open(outfile, 'w', encoding='utf-8') as f:
+                json.dump(docta_json, f, ensure_ascii=False, indent=True)
         # json.dump(docta_json, open(outfile, "w"), indent=True)
-        self.report(predict_mode=predict_mode)
+        # self.report(predict_mode=predict_mode)
+        return candgen_view_json
 
     def get_lorelei_candidates(self, orig_query_str, query_str, romanized_query_str=None, ner_type=None, args=None):
         # Cheap Dict
@@ -619,19 +617,6 @@ class CandGen:
             eids += self._exact_match_kb(i, args)
         eids = list(set(eids))
         # logging.info("got %d candidates for query:%s from exact match", len(eids), query_str)
-
-
-        if args.wikicg:
-            wiki_titles, wids, wid_cprobs = self._extract_ptm_cands(self.wiki_cg.get_candidates(surface=orig_query_str))
-            # eids_wikicg = wids
-            eids_wikicg = []
-            for w in wids:
-                if self.en_id2t[w]["name"] not in eids_wikicg:
-                    eids_wikicg.append(self.en_id2t[w]["name"])
-            if args.google + args.google_map == 0:
-                eids = []
-        else:
-            eids_wikicg = []
 
         eids_google = []
         if args.google and ((not args.wikidata) or (args.wikidata and len(eids_wikicg) == 0)):
@@ -679,6 +664,18 @@ class CandGen:
             eids_google_maps += [h for k in google_map_name_suf_dot for h in self._get_candidates_google(k, lang='en', top_num=args.google_top)[0]]
         eids_google_maps = list(set(eids_google_maps))
         # logging.info("got %d candidates for query:%s from google map", len(set(eids_google_maps)), query_str)
+
+        if args.wikicg:
+            wiki_titles, wids, wid_cprobs = self._extract_ptm_cands(self.wiki_cg.get_candidates(surface=orig_query_str))
+            # eids_wikicg = wids
+            eids_wikicg = []
+            for w in wids:
+                if self.en_id2t[w]["name"] not in eids_wikicg:
+                    eids_wikicg.append(self.en_id2t[w]["name"])
+            if args.google + args.google_map == 0:
+                eids = []
+        else:
+            eids_wikicg = []
 
         eids_hindi = []
         if args.pivoting:
@@ -847,66 +844,44 @@ class CandGen:
         return romanized
 
 
-if __name__ == '__main__':
-    PARSER = argparse.ArgumentParser(description='Short sample app')
-    PARSER.add_argument('--kbdir', default="/shared/EDL19/wiki_outdir", type=str)
-    PARSER.add_argument('--goldfile', default="", type=str)
-    PARSER.add_argument('--nolog', action="store_true")
-    PARSER.add_argument('--lang', default='si', type=str)
-    PARSER.add_argument('--year', default="20191020")
-    PARSER.add_argument('--pool', default=1, type=int)
-    PARSER.add_argument('--indir', default='/pool0/webserver/incoming/experiment_tmp/EDL2019/data/input/si')
-    PARSER.add_argument('--outdir', default='/pool0/webserver/incoming/experiment_tmp/EDL2019/data/our_output/try_fxy')
-    PARSER.add_argument('--overwrite', default=1, type=int)
-    # data source
-    PARSER.add_argument('--wikidata', default=0, type=int)
-    # use P(t|m)
-    PARSER.add_argument('--wikicg', default=1, type=int)
-    # For Cand gen
-    PARSER.add_argument('--google', default=1, type=int)
-    PARSER.add_argument('--google_top', type=int, default=5)
-    PARSER.add_argument('--google_map', default=1, type=int)
-    PARSER.add_argument('--g_trans', default=0, type=int)
-    PARSER.add_argument('--tsl', default=1, type=int)
-    PARSER.add_argument('--pivoting', default=0, type=int)
-    PARSER.add_argument('--spell', default=0, type=int)
-    # For Ranking
-    PARSER.add_argument('--inlink', default=0, type=int)
-    PARSER.add_argument('--mtype', default=0, type=int)
-    PARSER.add_argument('--classifier', default=0, type=int)
-    PARSER.add_argument('--bert', default=1, type=int)
-    PARSER.add_argument('--wiki_contain', default=0, type=int)
-    args = PARSER.parse_args()
-    logging.info(args)
+# For demo
+PARSER = argparse.ArgumentParser(description='Short sample app')
+PARSER.add_argument('--kbdir', default="/shared/EDL19/wiki_outdir", type=str)
+PARSER.add_argument('--lang', default='', type=str)
+PARSER.add_argument('--year', default="20191020")
+# data source
+PARSER.add_argument('--wikidata', default=0, type=int)
+# use P(t|m)
+PARSER.add_argument('--wikicg', default=1, type=int)
+# For Cand gen
+PARSER.add_argument('--google', default=1, type=int)
+PARSER.add_argument('--google_top', type=int, default=5)
+PARSER.add_argument('--google_map', default=1, type=int)
+PARSER.add_argument('--g_trans', default=0, type=int)
+PARSER.add_argument('--tsl', default=0, type=int)
+PARSER.add_argument('--pivoting', default=0, type=int)
+PARSER.add_argument('--spell', default=0, type=int)
+# For Ranking
+PARSER.add_argument('--inlink', default=0, type=int)
+PARSER.add_argument('--mtype', default=0, type=int)
+PARSER.add_argument('--classifier', default=0, type=int)
+PARSER.add_argument('--bert', default=0, type=int)
+PARSER.add_argument('--wiki_contain', default=0, type=int)
+args = PARSER.parse_args()
+logging.info(args)
 
-    if args.indir is None or args.outdir is None:
-        logging.info("require --indir and --outdir")
-        sys.exit(0)
-    else:
-        logging.info(f'Generating candidates using {args.indir} and {args.outdir}')
+logging.disable(logging.INFO)
 
-    if args.overwrite:
-        os.system(f'rm -r {args.outdir}')
-    os.makedirs(args.outdir, exist_ok=True)
-
-    # if args.lang not in ['ti', 'or'] and args.tsl+args.g_trans+args.pivoting+args.spell > 0:
-    #     print('not or, not support functions')
-    #     exit()
-
-    if args.nolog:
-        logging.disable(logging.INFO)
-
+def call_this_for_demo(docta, lang, bert=0):
+    # docta should be TextAnnotation Format
+    args.lang = lang
+    args.bert = bert
     if not args.lang:
         sys.exit('No language specified.')
+    if args.lang not in ['ilo', 'or', 'si', 'rw']:
+        args.bert = 0
 
-    if args.inlink:
-        inlinks = Inlinks()
-        logging.info("inlinks loaded %d", inlinks.inlinks.size())
-        inlinks = inlinks.inlinks
-    else:
-        inlinks = None
-
-
+    inlinks = None
     if args.wikicg:
         wiki_cg = CandidateGenerator(K=6,
                                      kbfile=None,
@@ -914,20 +889,17 @@ if __name__ == '__main__':
                                      use_eng=False,
                                      fallback=True)
         wiki_cg.load_probs("data/{}wiki/probmap/{}wiki-{}".format(args.lang, args.lang, args.year))
-
     else:
         wiki_cg = None
     if args.tsl and args.lang == 'or':
         tsl = init_model('/pool0/webserver/incoming/experiment_tmp/EDL2019/src/hma_translit/model/or/or_data.vocab',
-                   '/pool0/webserver/incoming/experiment_tmp/EDL2019/src/hma_translit/model/or/or.model')
-        tsl_concept_pair, tsl_translit_dict = load_tsl_concept('/pool0/webserver/incoming/experiment_tmp/EDL2019/src/hma_translit/model/or/concept_pairs.txt',
-                          '/pool0/webserver/incoming/experiment_tmp/EDL2019/src/hma_translit/model/or/translit_data.txt')
+                         '/pool0/webserver/incoming/experiment_tmp/EDL2019/src/hma_translit/model/or/or.model')
+        tsl_concept_pair, tsl_translit_dict = load_tsl_concept(
+            '/pool0/webserver/incoming/experiment_tmp/EDL2019/src/hma_translit/model/or/concept_pairs.txt',
+            '/pool0/webserver/incoming/experiment_tmp/EDL2019/src/hma_translit/model/or/translit_data.txt')
     else:
         tsl = None
         tsl_concept_pair, tsl_translit_dict = None, None
-    # if args.spell:
-    #     spellchecker = SpellChecker(distance=1)
-    # else:
     spellchecker = None
 
     # load bert
@@ -935,33 +907,26 @@ if __name__ == '__main__':
         model_path = ''
         if args.lang == 'ilo':
             model_path = '/pool0/webserver/incoming/experiment_tmp/EDL2019/bert_models/il12F2_Out/400k+Steps/il12F2_Out'
-            tokenizer = BertTokenizer.from_pretrained(model_path)
+            args.tokenizer = BertTokenizer.from_pretrained(model_path)
             model = BertModel.from_pretrained(model_path, from_tf=False)
         elif args.lang == 'or':
             model_path = '/pool0/webserver/incoming/experiment_tmp/EDL2019/bert_models/il11F2_Out/400k+Steps/il11F2_Out'
-            tokenizer = BertTokenizer.from_pretrained(model_path)
+            args.tokenizer = BertTokenizer.from_pretrained(model_path)
             model = BertModel.from_pretrained(model_path, from_tf=False)
         elif args.lang == 'si':
-            tokenizer = BertTokenizer.from_pretrained('/pool0/webserver/incoming/experiment_tmp/EDL2019/bert_models/il10/pretraining_output_500000')
-            model = BertModel.from_pretrained('/pool0/webserver/incoming/experiment_tmp/EDL2019/bert_models/il10/pretraining_output_500000', from_tf=False)
+            args.tokenizer = BertTokenizer.from_pretrained(
+                '/pool0/webserver/incoming/experiment_tmp/EDL2019/bert_models/il10/pretraining_output_500000')
+            model = BertModel.from_pretrained(
+                '/pool0/webserver/incoming/experiment_tmp/EDL2019/bert_models/il10/pretraining_output_500000',
+                from_tf=False)
         elif args.lang == 'rw':
-            tokenizer = BertTokenizer.from_pretrained('/pool0/webserver/incoming/experiment_tmp/EDL2019/bert_models/il9/pretraining_output_500000')
-            model = BertModel.from_pretrained('/pool0/webserver/incoming/experiment_tmp/EDL2019/bert_models/il9/pretraining_output_500000', from_tf=False)
-        else:
-            tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
-            model = BertModel.from_pretrained('/pool0/webserver/incoming/experiment_tmp/EDL2019/src/bert/multilingual_bert')
-
-    if args.classifier:
-        sys.path.append("/shared/experiments/xyu71/lorelei2017/src/attrib_disamb/ours")
-        from data import Data
-        from trainer_all import Trainer
-        data = Data()
-        data.load("/shared/experiments/xyu71/lorelei2017/src/attrib_disamb/ours/data/il5_9-10data.pk")
-        path = "/shared/experiments/xyu71/lorelei2017/src/attrib_disamb/ours/save/model1.bin"
-        the_model = torch.load(path)
-        loaded_model = Trainer(data=data, model=the_model)
-    else:
-        loaded_model = None
+            args.tokenizer = BertTokenizer.from_pretrained(
+                '/pool0/webserver/incoming/experiment_tmp/EDL2019/bert_models/il9/pretraining_output_500000')
+            model = BertModel.from_pretrained(
+                '/pool0/webserver/incoming/experiment_tmp/EDL2019/bert_models/il9/pretraining_output_500000', from_tf=False)
+        # else:
+        #     tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
+        #     model = BertModel.from_pretrained('/pool0/webserver/incoming/experiment_tmp/EDL2019/src/bert/multilingual_bert')
     lang = args.lang
 
     # Wiki load in ============================Important===========================
@@ -970,7 +935,7 @@ if __name__ == '__main__':
     cg = CandGen(lang=args.lang, year=args.year, inlinks=inlinks,
                  tsl=tsl, tsl_concept_pair=tsl_concept_pair,
                  tsl_translit_dict=tsl_translit_dict, spellchecker=spellchecker,
-                 classifier = loaded_model, wiki_cg = wiki_cg)
+                 classifier=None, wiki_cg=wiki_cg)
     cg.load_kb(args.kbdir)
 
     # Mongodb
@@ -978,25 +943,11 @@ if __name__ == '__main__':
     # args.mention2url_entity = MongoBackedDict(dbname=f"mention2url_entity_{args.lang}")
     # args.mention2gmap_entity = MongoBackedDict(dbname=f"mention2gmap_entity_{args.lang}")
 
-    file_names = os.listdir(args.indir)
-    infile_outfile_list = [(os.path.join(args.indir, n), os.path.join(args.outdir, n + '.json')) for n in file_names]
+    returned_json = cg.compute_hits_for_ta(docta=docta, outfile=None, args=args)
+    linking_results = returned_json["viewData"][0]["constituents"]
+    print(returned_json)
 
-    def process_file(file):
-        infile = os.path.join(args.indir, file)
-        outfile = os.path.join(args.outdir, file + '.json')
-        logging.info(f'Processing {infile} and output to {outfile}')
-        try:
-            docta = TextAnnotation(json_str=open(infile, encoding='utf8', errors='ignore').read())
-        except:
-            return
-        docid = infile.split("/")[-1]
-        logging.info("processing docid %s", docid)
-        cg.compute_hits_for_ta(docta=docta, outfile=outfile, args=args)
 
-    if args.pool > 1:
-        p = Pool(args.pool)
-        p.map(process_file, file_names)
-        p.close()
-    else:
-        for file in file_names:
-            process_file(file)
+# example input file: /pool0/webserver/incoming/experiment_tmp/EDL2019/data/input/ak/AKA_NA_006644_20170516_H0025ZXL0
+docta = TextAnnotation(json_str=open('/pool0/webserver/incoming/experiment_tmp/EDL2019/data/input/ak/AKA_NA_006644_20170516_H0025ZXL0', encoding='utf8', errors='ignore').read())
+call_this_for_demo(docta, 'ak', 1)
